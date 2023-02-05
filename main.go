@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,47 +24,60 @@ func readFile(p string) string {
 	return strings.TrimSpace(string(bs))
 }
 
-func hello(w http.ResponseWriter, r *http.Request) {
+type usbDevice struct {
+	VendorID     string `json:"vendor-id,omitempty"`
+	ProductID    string `json:"product-id,omitempty"`
+	Manufacturer string `json:"manufacturer,omitempty"`
+	Product      string `json:"product,omitempty"`
+}
+
+func readUSBs() ([]usbDevice, error) {
 	entries, err := os.ReadDir(sysUSB)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "read dir: %s", err)
-		return
+		return nil, fmt.Errorf("read dir: %s", err)
 	}
+
+	var usbs []usbDevice
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "usb") || strings.Contains(e.Name(), ":") {
 			continue
 		}
+		usb := usbDevice{
+			VendorID:     readFile(path.Join(sysUSB, e.Name(), "idVendor")),
+			ProductID:    readFile(path.Join(sysUSB, e.Name(), "idProduct")),
+			Manufacturer: readFile(path.Join(sysUSB, e.Name(), "manufacturer")),
+			Product:      readFile(path.Join(sysUSB, e.Name(), "product")),
+		}
+		usbs = append(usbs, usb)
 
-		vendorFile := path.Join(sysUSB, e.Name(), "idVendor")
-		vendor := readFile(vendorFile)
-
-		productFile := path.Join(sysUSB, e.Name(), "idProduct")
-		product := readFile(productFile)
-
-		manufacturerFile := path.Join(sysUSB, e.Name(), "manufacturer")
-		manufacturer := readFile(manufacturerFile)
-
-		prodFile := path.Join(sysUSB, e.Name(), "product")
-		prod := readFile(prodFile)
-
-		fmt.Fprintf(w, "%s vendor:  %s\n", e.Name(), vendor)
-		fmt.Fprintf(w, "%s product: %s\n", e.Name(), product)
-		fmt.Fprintf(w, "%s mfct:    %s\n", e.Name(), manufacturer)
-		fmt.Fprintf(w, "%s name:    %s\n", e.Name(), prod)
-		fmt.Fprintf(w, "\n")
 	}
+	return usbs, nil
+}
+
+func handleGetDevices(w http.ResponseWriter, r *http.Request) {
+	entries, err := readUSBs()
+	if err != nil {
+		http.Error(w, fmt.Errorf("read usb devices: %s", err).Error(), http.StatusInternalServerError)
+		return
+	}
+
+	bs, err := json.MarshalIndent(entries, "", "    ")
+	if err != nil {
+		http.Error(w, fmt.Errorf("json marshal: %s", err).Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(bs)
 }
 
 func main() {
-
 	// Wait until network interfaces have a chance to work.
 	gokrazy.WaitForClock()
 
-	server := &http.Server{Addr: ":8080", Handler: http.HandlerFunc(hello)}
+	server := &http.Server{Addr: ":8080", Handler: http.HandlerFunc(handleGetDevices)}
 	err := server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Println(err)
 	}
-	os.Exit(0) // Let gokrazy restart this service.
+	os.Exit(0)
 }
