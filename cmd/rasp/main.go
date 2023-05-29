@@ -1,15 +1,22 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
 
 	"github.com/gokrazy/gokrazy"
+
+	// libsql (Turso) DB driver.
+	_ "github.com/libsql/libsql-client-go/libsql"
 )
 
 // https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-bus-usb
@@ -74,8 +81,38 @@ func main() {
 	// Wait until network interfaces have a chance to work.
 	gokrazy.WaitForClock()
 
+	// Database configuration from deployment.
+	scheme := os.Getenv("DB_SCHEME")
+	host := os.Getenv("DB_HOST")
+	token := os.Getenv("DB_TOKEN")
+	u := url.URL{
+		Scheme:   scheme,
+		Host:     host,
+		RawQuery: url.Values{"jwt": {token}}.Encode(),
+	}
+
+	db, err := sql.Open("libsql", u.String())
+	if err != nil {
+		log.Fatalf("open DB: %s\n", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	rows, err := db.QueryContext(ctx, `select * from people`)
+	if err != nil {
+		log.Fatalf("query: %s\n", err)
+	}
+	for rows.Next() {
+		var name string
+		var age int
+		if err := rows.Scan(&name, &age); err != nil {
+			log.Fatalf("row scan: %s\n", err)
+		}
+		log.Printf("%q %d", name, age)
+	}
+
 	server := &http.Server{Addr: ":8080", Handler: http.HandlerFunc(handleGetDevices)}
-	err := server.ListenAndServe()
+	err = server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Println(err)
 	}
