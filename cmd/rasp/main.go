@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/gokrazy/gokrazy"
 
@@ -19,8 +20,16 @@ import (
 	_ "github.com/libsql/libsql-client-go/libsql"
 )
 
-// https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-bus-usb
-const sysUSB = "/sys/bus/usb/devices"
+const (
+	// https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-bus-usb
+	sysUSB = "/sys/bus/usb/devices"
+
+	yamahaVendorID = "0499"
+	pianoProduct   = "Digital Piano"
+
+	// pollInterval between querying USB devices.
+	pollInterval = time.Second
+)
 
 // readFile content, w/o whitespace, or "" if not possible.
 func readFile(p string) string {
@@ -77,10 +86,11 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 	w.Write(bs)
 }
 
-func main() {
-	// Wait until network interfaces have a chance to work.
-	gokrazy.WaitForClock()
+type Repo struct {
+	db *sql.DB
+}
 
+func NewDB() (*Repo, error) {
 	// Database configuration from deployment.
 	scheme := os.Getenv("DB_SCHEME")
 	host := os.Getenv("DB_HOST")
@@ -93,23 +103,75 @@ func main() {
 
 	db, err := sql.Open("libsql", u.String())
 	if err != nil {
-		log.Fatalf("open DB: %s\n", err)
+		return nil, fmt.Errorf("open DB: %w", err)
 	}
+
+	return &Repo{db: db}, nil
+}
+
+func (r *Repo) StoreSession(ctx context.Context, at time.Time, length time.Duration) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`insert into piano_sessions(at, seconds) values (?, ?)`,
+		at.Format(time.RFC3339),
+		int(length.Seconds()))
+	if err != nil {
+		log.Fatalf("insert: %s\n", err)
+	}
+	return nil
+}
+
+func HasPiano(devices []usbDevice) bool {
+	for _, d := range devices {
+		if d.Product == pianoProduct {
+			return true
+		}
+	}
+	return false
+}
+
+func monitorPiano(ctx context.Context, repo *Repo) error {
+	for ctx.Err() == nil {
+		devices, err := readUSBs()
+		if err != nil {
+			log.Printf("read USBs: %s", err)
+		}
+
+		if HasPiano(devices) {
+			log.Printf("piano connected")
+			start := time.Now()
+
+			for HasPiano(devices) {
+				time.Sleep(pollInterval)
+				devices, err = readUSBs()
+				if err != nil {
+					log.Printf("read USBs: %s", err)
+					break
+				}
+			}
+
+			log.Printf("piano disconnected")
+			repo.StoreSession(ctx, start, time.Since(start))
+		}
+
+		time.Sleep(pollInterval)
+	}
+	return nil
+}
+
+func main() {
+	// Wait until network interfaces have a chance to work.
+	gokrazy.WaitForClock()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	rows, err := db.QueryContext(ctx, `select * from people`)
+	repo, err := NewDB()
 	if err != nil {
-		log.Fatalf("query: %s\n", err)
+		log.Fatalf("Connect to DB: %s", err)
 	}
-	for rows.Next() {
-		var name string
-		var age int
-		if err := rows.Scan(&name, &age); err != nil {
-			log.Fatalf("row scan: %s\n", err)
-		}
-		log.Printf("%q %d", name, age)
-	}
+
+	go monitorPiano(ctx, repo)
 
 	server := &http.Server{Addr: ":8080", Handler: http.HandlerFunc(handleGetDevices)}
 	err = server.ListenAndServe()
