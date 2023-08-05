@@ -116,7 +116,7 @@ func (r *Repo) StoreSession(ctx context.Context, at time.Time, length time.Durat
 		at.Format(time.RFC3339),
 		int(length.Seconds()))
 	if err != nil {
-		log.Fatalf("insert: %s\n", err)
+		return fmt.Errorf("insert: %w", err)
 	}
 	return nil
 }
@@ -151,7 +151,10 @@ func monitorPiano(ctx context.Context, repo *Repo) error {
 			}
 
 			log.Printf("piano disconnected")
-			repo.StoreSession(ctx, start, time.Since(start))
+			err := repo.StoreSession(ctx, start, time.Since(start))
+			if err != nil {
+				log.Printf("store session failed: %s", err)
+			}
 		}
 
 		time.Sleep(pollInterval)
