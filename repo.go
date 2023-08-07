@@ -55,7 +55,7 @@ func (r *Repo) Sessions(ctx context.Context) (map[string]int, error) {
 	counts := make(map[string]int)
 	rows, err := r.db.QueryContext(ctx, `select at,seconds from piano_sessions`)
 	if err != nil {
-		return nil, fmt.Errorf("insert: %w", err)
+		return nil, fmt.Errorf("query: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
