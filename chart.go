@@ -29,26 +29,6 @@ var DefaultConfig = charts.HeatmapConfig{
 	ColorScale: BiasedColorscale(gray, blue, 100),
 }
 
-func LinearColorscale(from, to color.RGBA, n int) charts.BasicColorScale {
-	// TODO
-	if n < 2 {
-		return nil
-	}
-	dr := float64(int(to.R)-int(from.R)) / float64(n)
-	dg := float64(int(to.G)-int(from.G)) / float64(n)
-	db := float64(int(to.B)-int(from.B)) / float64(n)
-	cs := make(charts.BasicColorScale, n)
-	for i := 0; i < n; i++ {
-		cs[i] = color.RGBA{
-			R: from.R + uint8(math.Round(dr*float64(i))),
-			G: from.G + uint8(math.Round(dg*float64(i))),
-			B: from.B + uint8(math.Round(db*float64(i))),
-			A: 255,
-		}
-	}
-	return cs
-}
-
 // BiasedColorscale leans towards the "to" color.
 func BiasedColorscale(from, to color.RGBA, n int) charts.BasicColorScale {
 	// TODO

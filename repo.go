@@ -59,6 +59,7 @@ func (r *Repo) Sessions(ctx context.Context) (map[string]int, error) {
 	}
 	defer rows.Close()
 	for rows.Next() {
+		// For some reason the column is returned as text, not datetime.
 		var atRaw string
 		var duration int
 		err := rows.Scan(&atRaw, &duration)
