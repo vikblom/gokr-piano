@@ -98,7 +98,7 @@ func NewDB() (*Repo, error) {
 	u := url.URL{
 		Scheme:   scheme,
 		Host:     host,
-		RawQuery: url.Values{"jwt": {token}}.Encode(),
+		RawQuery: url.Values{"authToken": {token}}.Encode(),
 	}
 
 	db, err := sql.Open("libsql", u.String())
