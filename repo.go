@@ -36,6 +36,10 @@ func NewDB() (*Repo, error) {
 		return nil, fmt.Errorf("open DB: %w", err)
 	}
 
+	db.SetConnMaxIdleTime(3 * time.Minute)
+	db.SetMaxIdleConns(3)
+	db.SetMaxOpenConns(3)
+
 	return &Repo{db: db}, nil
 }
 
