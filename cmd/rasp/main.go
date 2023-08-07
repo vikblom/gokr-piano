@@ -2,22 +2,18 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/gokrazy/gokrazy"
-
-	// libsql (Turso) DB driver.
-	_ "github.com/libsql/libsql-client-go/libsql"
+	piano "github.com/vikblom/gokr-piano"
 )
 
 const (
@@ -86,41 +82,6 @@ func handleGetDevices(w http.ResponseWriter, r *http.Request) {
 	w.Write(bs)
 }
 
-type Repo struct {
-	db *sql.DB
-}
-
-func NewDB() (*Repo, error) {
-	// Database configuration from deployment.
-	scheme := os.Getenv("DB_SCHEME")
-	host := os.Getenv("DB_HOST")
-	token := os.Getenv("DB_TOKEN")
-	u := url.URL{
-		Scheme:   scheme,
-		Host:     host,
-		RawQuery: url.Values{"authToken": {token}}.Encode(),
-	}
-
-	db, err := sql.Open("libsql", u.String())
-	if err != nil {
-		return nil, fmt.Errorf("open DB: %w", err)
-	}
-
-	return &Repo{db: db}, nil
-}
-
-func (r *Repo) StoreSession(ctx context.Context, at time.Time, length time.Duration) error {
-	_, err := r.db.ExecContext(
-		ctx,
-		`insert into piano_sessions(at, seconds) values (?, ?)`,
-		at.Format(time.RFC3339),
-		int(length.Seconds()))
-	if err != nil {
-		return fmt.Errorf("insert: %w", err)
-	}
-	return nil
-}
-
 func HasPiano(devices []usbDevice) bool {
 	for _, d := range devices {
 		if d.Product == pianoProduct {
@@ -130,7 +91,7 @@ func HasPiano(devices []usbDevice) bool {
 	return false
 }
 
-func monitorPiano(ctx context.Context, repo *Repo) error {
+func monitorPiano(ctx context.Context, repo *piano.Repo) error {
 	for ctx.Err() == nil {
 		devices, err := readUSBs()
 		if err != nil {
@@ -169,7 +130,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	repo, err := NewDB()
+	repo, err := piano.NewDB()
 	if err != nil {
 		log.Fatalf("Connect to DB: %s", err)
 	}
