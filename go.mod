@@ -6,7 +6,7 @@ toolchain go1.23.1
 
 require (
 	github.com/gokrazy/gokrazy v0.0.0-20240419172022-d65536c20bc9
-	github.com/jackc/pgx/v5 v5.7.1
+	github.com/jackc/pgx/v5 v5.7.2
 	github.com/nikolaydubina/calendarheatmap v1.7.2
 )
 
@@ -19,9 +19,10 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/kenshaw/evdev v0.1.0 // indirect
 	github.com/mdlayher/watchdog v0.0.0-20221003142519-49be0df7b3b5 // indirect
-	golang.org/x/crypto v0.28.0 // indirect
-	golang.org/x/image v0.21.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
-	golang.org/x/text v0.19.0 // indirect
+	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/image v0.24.0 // indirect
+	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 )
